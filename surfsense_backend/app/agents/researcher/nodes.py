@@ -336,6 +336,7 @@ async def fetch_documents_by_ids(
                 "GITHUB_CONNECTOR": "GitHub (Selected)",
                 "YOUTUBE_VIDEO": "YouTube Videos (Selected)",
                 "DISCORD_CONNECTOR": "Discord (Selected)",
+                "ZENDESK_CONNECTOR": "Zendesk (Selected)",
                 "JIRA_CONNECTOR": "Jira Issues (Selected)",
                 "EXTENSION": "Browser Extension (Selected)",
                 "CRAWLED_URL": "Web Pages (Selected)",
@@ -894,6 +895,22 @@ async def fetch_relevant_documents(
                                     f"🗨️ Found {len(discord_chunks)} Discord messages related to your query"
                                 )
                             }
+                        )
+
+                elif connector_type == ConnectorTypeEnum.ZENDESK_CONNECTOR:
+                    zendesk_results = await connector_service.search_zendesk(
+                        query=query,
+                        search_space_id=search_space_id,
+                        search_source_connector_ids=zendesk_connector_ids,
+                        search_mode=search_mode,
+                        limit=limit_per_connector
+                    )
+                    
+                    all_results.extend(zendesk_results)
+                    
+                    if stream_update_callback:
+                        await stream_update_callback(
+                            f"🎫 Found {len(zendesk_results)} Zendesk results"
                         )
 
                 elif connector == "JIRA_CONNECTOR":

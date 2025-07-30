@@ -7,7 +7,7 @@ PUT /search-source-connectors/{connector_id} - Update a specific connector
 DELETE /search-source-connectors/{connector_id} - Delete a specific connector
 POST /search-source-connectors/{connector_id}/index - Index content from a connector to a search space
 
-Note: Each user can have only one connector of each type (SERPER_API, TAVILY_API, SLACK_CONNECTOR, NOTION_CONNECTOR, GITHUB_CONNECTOR, LINEAR_CONNECTOR, DISCORD_CONNECTOR).
+Note: Each user can have only one connector of each type (SERPER_API, TAVILY_API, SLACK_CONNECTOR, NOTION_CONNECTOR, GITHUB_CONNECTOR, LINEAR_CONNECTOR, DISCORD_CONNECTOR, ZENDESK_CONNECTOR).
 """
 
 import logging
@@ -38,6 +38,7 @@ from app.schemas import (
 from app.tasks.connectors_indexing_tasks import (
     index_confluence_pages,
     index_discord_messages,
+    index_zendesk_content,
     index_github_repos,
     index_jira_issues,
     index_linear_issues,
@@ -340,6 +341,7 @@ async def index_connector_content(
     - LINEAR_CONNECTOR: Indexes issues and comments from Linear
     - JIRA_CONNECTOR: Indexes issues and comments from Jira
     - DISCORD_CONNECTOR: Indexes messages from all accessible Discord channels
+    - ZENDESK_CONNECTOR: Indexes and searches tickets & help-center articles
 
     Args:
         connector_id: ID of the connector to use
@@ -511,6 +513,14 @@ async def index_connector_content(
         raise HTTPException(
             status_code=500, detail=f"Failed to initiate indexing: {e!s}"
         ) from e
+
+        # Add Zendesk support to the indexing endpoint
+        elif connector.connector_type == ConnectorTypeEnum.ZENDESK_CONNECTOR:
+            background_tasks.add_task(
+            index_zendesk_content,
+            search_source_connector_id=search_source_connector_id,
+            search_space_id=search_space_id
+            )
 
 
 async def update_connector_last_indexed(session: AsyncSession, connector_id: int):

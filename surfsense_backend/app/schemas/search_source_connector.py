@@ -123,6 +123,15 @@ class SearchSourceConnectorBase(BaseModel):
             # Ensure the bot token is not empty
             if not config.get("DISCORD_BOT_TOKEN"):
                 raise ValueError("DISCORD_BOT_TOKEN cannot be empty")
+        elif connector_type == SearchSourceConnectorType.ZENDESK_CONNECTOR:
+            allowed_keys = ["ZENDESK_SUBDOMAIN", "ZENDESK_EMAIL", "ZENDESK_TOKEN"]
+            if set(config.keys()) != set(allowed_keys):
+                raise ValueError(
+                    f"For ZENDESK_CONNECTOR connector type, config must only contain these keys: {allowed_keys}"
+                )
+            for key in allowed_keys:
+                if not config.get(key):
+                    raise ValueError(f"{key} cannot be empty")
         elif connector_type == SearchSourceConnectorType.JIRA_CONNECTOR:
             # For JIRA_CONNECTOR, require JIRA_EMAIL, JIRA_API_TOKEN and JIRA_BASE_URL
             allowed_keys = ["JIRA_EMAIL", "JIRA_API_TOKEN", "JIRA_BASE_URL"]

@@ -1288,6 +1288,60 @@ class ConnectorService:
                 "sources": [],
             }, []
 
+    async def search_zendesk(
+    self,
+    query: str,
+    search_space_id: int,
+    search_source_connector_ids: List[int],
+    search_mode: SearchModeEnum,
+    limit: int = 10
+) -> List[Dict[str, Any]]:
+    """
+    Search Zendesk tickets and articles
+    
+    Args:
+        query: Search query
+        search_space_id: ID of the search space
+        search_source_connector_ids: List of Zendesk connector IDs
+        search_mode: Search mode (chunks or documents)
+        limit: Maximum number of results
+        
+    Returns:
+        List of search results
+    """
+    if search_mode == SearchModeEnum.CHUNKS:
+        return await self._search_zendesk_chunks(
+            query, search_space_id, search_source_connector_ids, limit
+        )
+    else:
+        return await self._search_zendesk_documents(
+            query, search_space_id, search_source_connector_ids, limit
+        )
+
+async def _search_zendesk_chunks(
+    self,
+    query: str,
+    search_space_id: int,
+    search_source_connector_ids: List[int],
+    limit: int
+) -> List[Dict[str, Any]]:
+    """Search Zendesk content in chunks mode"""
+    # Implementation similar to Discord connector chunk search
+    # ... (follow existing pattern)
+    pass
+
+async def _search_zendesk_documents(
+    self,
+    query: str,
+    search_space_id: int,
+    search_source_connector_ids: List[int],
+    limit: int
+) -> List[Dict[str, Any]]:
+    """Search Zendesk content in documents mode"""
+    # Implementation similar to Discord connector document search
+    # ... (follow existing pattern)
+    pass
+
     async def search_discord(
         self,
         user_query: str,

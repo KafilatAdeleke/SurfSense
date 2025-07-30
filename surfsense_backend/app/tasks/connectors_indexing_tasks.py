@@ -15,6 +15,7 @@ from app.connectors.jira_connector import JiraConnector
 from app.connectors.linear_connector import LinearConnector
 from app.connectors.notion_history import NotionHistoryConnector
 from app.connectors.slack_history import SlackHistory
+from app.conectors.zendesk_connector import ZendeskConnector
 from app.db import (
     Chunk,
     Document,
@@ -1982,6 +1983,124 @@ async def index_discord_messages(
         return 0, f"Failed to index Discord messages: {e!s}"
 
 
+async def index_zendesk_content(
+    search_source_connector_id: int,
+    search_space_id: int
+) -> None:
+    """
+    Index Zendesk tickets and articles for a given connector
+    
+    Args:
+        search_source_connector_id: ID of the Zendesk connector
+        search_space_id: ID of the search space
+    """
+    async with async_session_local() as session:
+        try:
+            # Get connector config
+            connector_stmt = select(SearchSourceConnector).where(
+                SearchSourceConnector.id == search_source_connector_id
+            )
+            connector_result = await session.execute(connector_stmt)
+            connector = connector_result.scalar_one_or_none()
+            
+            if not connector:
+                logger.error(f"Zendesk connector {search_source_connector_id} not found")
+                return
+                
+            config = connector.config
+            subdomain = config.get("ZENDESK_SUBDOMAIN")
+            email = config.get("ZENDESK_EMAIL")
+            api_token = config.get("ZENDESK_API_TOKEN")
+            
+            if not all([subdomain, email, api_token]):
+                logger.error("Missing required Zendesk configuration")
+                return
+                
+            # Initialize Zendesk connector
+            zendesk_client = ZendeskConnector(subdomain, email, api_token)
+            
+            # Test connection
+            if not await zendesk_client.test_connection():
+                logger.error("Failed to connect to Zendesk")
+                return
+            
+            # Fetch tickets and articles
+            tickets = await zendesk_client.get_tickets()
+            articles = await zendesk_client.get_help_center_articles()
+            
+            all_content = tickets + articles
+            
+            # Process and index content
+            for content in all_content:
+                content_type = content.get('type', 'unknown')
+                content_id = f"zendesk_{content_type}_{content['id']}"
+                
+                # Create document
+                title = content.get('title') or content.get('subject', '')
+                body = content.get('body') or content.get('description', '')
+                
+                # Include comments for tickets
+                if content_type == 'ticket' and content.get('comments'):
+                    comments_text = "\n\n".join([
+                        f"Comment: {comment['body']}" 
+                        for comment in content['comments'] 
+                        if comment.get('body')
+                    ])
+                    if comments_text:
+                        body += "\n\n" + comments_text
+                
+                # Check if document already exists
+                existing_doc_stmt = select(Document).where(
+                    Document.connector_source_id == content_id,
+                    Document.search_space_id == search_space_id
+                )
+                existing_doc_result = await session.execute(existing_doc_stmt)
+                existing_doc = existing_doc_result.scalar_one_or_none()
+                
+                if existing_doc:
+                    # Update existing document
+                    existing_doc.title = title
+                    existing_doc.content = body
+                    existing_doc.updated_at = datetime.utcnow()
+                    document = existing_doc
+                else:
+                    # Create new document
+                    document = Document(
+                        title=title,
+                        content=body,
+                        document_type=DocumentTypeEnum.ZENDESK_CONNECTOR,
+                        connector_source_id=content_id,
+                        search_space_id=search_space_id,
+                        created_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow(),
+                        metadata={
+                            'zendesk_type': content_type,
+                            'zendesk_id': content['id'],
+                            'url': content.get('url', ''),
+                            'status': content.get('status'),
+                            'created_at': content.get('created_at'),
+                            'updated_at': content.get('updated_at')
+                        }
+                    )
+                    session.add(document)
+                
+                await session.flush()
+                
+                # Create chunks and embeddings (following existing pattern)
+                await create_document_chunks_and_embeddings(
+                    document=document,
+                    session=session
+                )
+            
+            await session.commit()
+            logger.info(f"Successfully indexed {len(all_content)} Zendesk items")
+            
+        except Exception as e:
+            logger.error(f"Error indexing Zendesk content: {e}")
+            await session.rollback()
+            raise
+
+
 async def index_jira_issues(
     session: AsyncSession,
     connector_id: int,
@@ -2698,3 +2817,4 @@ async def index_confluence_pages(
         )
         logger.error(f"Failed to index Confluence pages: {e!s}", exc_info=True)
         return 0, f"Failed to index Confluence pages: {e!s}"
+
