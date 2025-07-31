@@ -52,6 +52,9 @@ export function useConnectorEditPage(connectorId: number, searchSpaceId: string)
 			JIRA_BASE_URL: "",
 			JIRA_EMAIL: "",
 			JIRA_API_TOKEN: "",
+			ZENDESK_SUBDOMAIN: "",
+			ZENDESK_EMAIL: "",
+			ZENDESK_API_TOKEN: "",
 		},
 	});
 
@@ -78,6 +81,9 @@ export function useConnectorEditPage(connectorId: number, searchSpaceId: string)
 					JIRA_BASE_URL: config.JIRA_BASE_URL || "",
 					JIRA_EMAIL: config.JIRA_EMAIL || "",
 					JIRA_API_TOKEN: config.JIRA_API_TOKEN || "",
+					ZENDESK_SUBDOMAIN: config.ZENDESK_SUBDOMAIN || "",
+					ZENDESK_EMAIL: config.ZENDESK_EMAIL || "",
+					ZENDESK_API_TOKEN: config.ZENDESK_API_TOKEN || "",
 				});
 				if (currentConnector.connector_type === "GITHUB_CONNECTOR") {
 					const savedRepos = config.repo_full_names || [];

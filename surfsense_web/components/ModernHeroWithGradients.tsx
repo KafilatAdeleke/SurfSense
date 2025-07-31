@@ -1,5 +1,10 @@
 "use client";
-import { IconBrandDiscord, IconBrandGithub, IconFileTypeDoc } from "@tabler/icons-react";
+import {
+	IconBrandDiscord,
+	IconBrandGithub,
+	IconFileTypeDoc,
+	IconTicket,
+} from "@tabler/icons-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Logo } from "./Logo";
@@ -50,9 +55,17 @@ export function ModernHeroWithGradients() {
 						</div>
 						<p className="mx-auto max-w-3xl py-6 text-center text-base text-gray-600 dark:text-neutral-300 md:text-lg lg:text-xl">
 							A Customizable AI Research Agent just like NotebookLM or Perplexity, but connected to
-							external sources such as Search Engines, Slack, Linear, Jira, Confluence, Notion, YouTube, GitHub, Discord and more.
+							external sources such as Search Engines, Slack, Linear, Jira, Confluence, Notion,
+							YouTube, GitHub, Discord, Zendesk and more.
 						</p>
 						<div className="flex flex-col items-center gap-6 py-6 sm:flex-row">
+							<Link
+								href="https://www.zendesk.com"
+								className="w-48 gap-1 rounded-full border border-transparent bg-gray-800 px-5 py-3 text-center text-sm font-medium text-white shadow-sm hover:bg-gray-700 dark:bg-gradient-to-r dark:from-purple-700 dark:to-indigo-800 dark:text-white dark:hover:from-purple-600 dark:hover:to-indigo-700 flex items-center justify-center"
+							>
+								<IconTicket className="h-5 w-5 mr-2" />
+								<span>Zendesk</span>
+							</Link>
 							<Link
 								href="https://discord.gg/ejRNvftDp9"
 								className="w-48 gap-1 rounded-full border border-gray-200 bg-gradient-to-b from-gray-50 to-gray-100 px-5 py-3 text-center text-sm font-medium text-gray-800 shadow-sm dark:border-[#404040] dark:bg-gradient-to-b dark:from-[#5B5B5D] dark:to-[#262627] dark:text-white dark:shadow-inner dark:shadow-purple-500/10 flex items-center justify-center"

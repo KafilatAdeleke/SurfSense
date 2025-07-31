@@ -55,6 +55,7 @@ export const getConnectorIcon = (connectorType: string) => {
 		case "DISCORD_CONNECTOR":
 			return <IconBrandDiscord {...iconProps} />;
 		case "JIRA_CONNECTOR":
+		case "ZENDESK_CONNECTOR":
 			return <IconTicket {...iconProps} />;
 		case "DEEP":
 			return <Sparkles {...iconProps} />;

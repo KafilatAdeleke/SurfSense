@@ -249,6 +249,33 @@ export default function EditConnectorPage() {
 										placeholder="Bot token..."
 									/>
 								)}
+
+								{/* == Zendesk == */}
+								{connector.connector_type === "ZENDESK_CONNECTOR" && (
+									<div className="space-y-4">
+										<EditSimpleTokenForm
+											control={editForm.control}
+											fieldName="ZENDESK_SUBDOMAIN"
+											fieldLabel="Zendesk Subdomain"
+											fieldDescription="Update your Zendesk subdomain if needed."
+											placeholder="yourcompany"
+										/>
+										<EditSimpleTokenForm
+											control={editForm.control}
+											fieldName="ZENDESK_EMAIL"
+											fieldLabel="Zendesk Email"
+											fieldDescription="Update your Zendesk admin email if needed."
+											placeholder="admin@example.com"
+										/>
+										<EditSimpleTokenForm
+											control={editForm.control}
+											fieldName="ZENDESK_API_TOKEN"
+											fieldLabel="Zendesk API Token"
+											fieldDescription="Update your Zendesk API Token if needed."
+											placeholder="zd_..."
+										/>
+									</div>
+								)}
 							</CardContent>
 							<CardFooter className="border-t pt-6">
 								<Button type="submit" disabled={isSaving} className="w-full sm:w-auto">

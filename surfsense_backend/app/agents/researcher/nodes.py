@@ -897,22 +897,6 @@ async def fetch_relevant_documents(
                             }
                         )
 
-                elif connector_type == ConnectorTypeEnum.ZENDESK_CONNECTOR:
-                    zendesk_results = await connector_service.search_zendesk(
-                        query=query,
-                        search_space_id=search_space_id,
-                        search_source_connector_ids=zendesk_connector_ids,
-                        search_mode=search_mode,
-                        limit=limit_per_connector
-                    )
-                    
-                    all_results.extend(zendesk_results)
-                    
-                    if stream_update_callback:
-                        await stream_update_callback(
-                            f"🎫 Found {len(zendesk_results)} Zendesk results"
-                        )
-
                 elif connector == "JIRA_CONNECTOR":
                     source_object, jira_chunks = await connector_service.search_jira(
                         user_query=reformulated_query,

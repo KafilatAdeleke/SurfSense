@@ -107,6 +107,13 @@ const connectorCategories: ConnectorCategory[] = [
 				icon: <IconTicket className="h-6 w-6" />,
 				status: "available",
 			},
+			{
+				id: "zendesk-connector",
+				title: "Zendesk",
+				description: "Connect to Zendesk to index and search tickets and help center articles.",
+				icon: <IconTicket className="h-6 w-6" />,
+				status: "available",
+			},
 		],
 	},
 	{

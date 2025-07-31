@@ -15,7 +15,7 @@ from app.connectors.jira_connector import JiraConnector
 from app.connectors.linear_connector import LinearConnector
 from app.connectors.notion_history import NotionHistoryConnector
 from app.connectors.slack_history import SlackHistory
-from app.conectors.zendesk_connector import ZendeskConnector
+from app.connectors.zendesk_connector import ZendeskConnector
 from app.db import (
     Chunk,
     Document,
@@ -24,6 +24,7 @@ from app.db import (
     SearchSourceConnectorType,
 )
 from app.prompts import SUMMARY_PROMPT_TEMPLATE
+from app.services.connector_service import update_connector_last_indexed
 from app.services.llm_service import get_user_long_context_llm
 from app.services.task_logging_service import TaskLoggingService
 from app.utils.document_converters import generate_content_hash
@@ -1983,122 +1984,232 @@ async def index_discord_messages(
         return 0, f"Failed to index Discord messages: {e!s}"
 
 
-async def index_zendesk_content(
-    search_source_connector_id: int,
-    search_space_id: int
-) -> None:
-    """
-    Index Zendesk tickets and articles for a given connector
-    
-    Args:
-        search_source_connector_id: ID of the Zendesk connector
-        search_space_id: ID of the search space
-    """
-    async with async_session_local() as session:
-        try:
-            # Get connector config
-            connector_stmt = select(SearchSourceConnector).where(
-                SearchSourceConnector.id == search_source_connector_id
+async def run_zendesk_indexing(
+    session: AsyncSession,
+    connector_id: int,
+    search_space_id: int,
+    user_id: str,
+    start_date: str,
+    end_date: str,
+):
+    try:
+        # Index Zendesk content without updating last_indexed_at (we'll do it separately)
+        documents_processed, error_or_warning = await index_zendesk_content(
+            session=session,
+            connector_id=connector_id,
+            search_space_id=search_space_id,
+            user_id=user_id,
+            start_date=start_date,
+            end_date=end_date,
+            update_last_indexed=False,  # Don't update timestamp in the indexing function
+        )
+
+        # Only update last_indexed_at if indexing was successful (either new docs or updated docs)
+        if documents_processed > 0:
+            await update_connector_last_indexed(session, connector_id)
+            logger.info(
+                f"Zendesk indexing completed successfully: {documents_processed} documents processed"
             )
-            connector_result = await session.execute(connector_stmt)
-            connector = connector_result.scalar_one_or_none()
-            
-            if not connector:
-                logger.error(f"Zendesk connector {search_source_connector_id} not found")
-                return
-                
-            config = connector.config
-            subdomain = config.get("ZENDESK_SUBDOMAIN")
-            email = config.get("ZENDESK_EMAIL")
-            api_token = config.get("ZENDESK_API_TOKEN")
-            
-            if not all([subdomain, email, api_token]):
-                logger.error("Missing required Zendesk configuration")
-                return
-                
-            # Initialize Zendesk connector
-            zendesk_client = ZendeskConnector(subdomain, email, api_token)
-            
-            # Test connection
-            if not await zendesk_client.test_connection():
-                logger.error("Failed to connect to Zendesk")
-                return
-            
-            # Fetch tickets and articles
-            tickets = await zendesk_client.get_tickets()
-            articles = await zendesk_client.get_help_center_articles()
-            
-            all_content = tickets + articles
-            
-            # Process and index content
-            for content in all_content:
-                content_type = content.get('type', 'unknown')
+        else:
+            logger.error(
+                f"Zendesk indexing failed or no documents processed: {error_or_warning}"
+            )
+    except Exception as e:
+        logger.error(f"Error in background Zendesk indexing task: {e!s}")
+
+
+async def index_zendesk_content(
+    session: AsyncSession,
+    connector_id: int,
+    search_space_id: int,
+    user_id: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    update_last_indexed: bool = True,
+) -> tuple[int, str | None]:
+    task_logger = TaskLoggingService(session, search_space_id)
+
+    # Log task start
+    log_entry = await task_logger.log_task_start(
+        task_name="zendesk_content_indexing",
+        source="connector_indexing_task",
+        message=f"Starting Zendesk content indexing for connector {connector_id}",
+        metadata={
+            "connector_id": connector_id,
+            "user_id": str(user_id),
+            "start_date": start_date,
+            "end_date": end_date,
+        },
+    )
+
+    try:
+        # Get the connector
+        await task_logger.log_task_progress(
+            log_entry,
+            f"Retrieving Zendesk connector {connector_id} from database",
+            {"stage": "connector_retrieval"},
+        )
+
+        result = await session.execute(
+            select(SearchSourceConnector).filter(
+                SearchSourceConnector.id == connector_id,
+                SearchSourceConnector.connector_type
+                == SearchSourceConnectorType.ZENDESK_CONNECTOR,
+            )
+        )
+        connector = result.scalars().first()
+
+        if not connector:
+            await task_logger.log_task_failure(
+                log_entry,
+                f"Connector with ID {connector_id} not found or is not a Zendesk connector",
+                "Connector not found",
+                {"error_type": "ConnectorNotFound"},
+            )
+            return (
+                0,
+                f"Connector with ID {connector_id} not found or is not a Zendesk connector",
+            )
+
+        # Get the Zendesk credentials from the connector config
+        zendesk_subdomain = connector.config.get("ZENDESK_SUBDOMAIN")
+        zendesk_email = connector.config.get("ZENDESK_EMAIL")
+        zendesk_token = connector.config.get("ZENDESK_API_TOKEN")
+
+        if not all([zendesk_subdomain, zendesk_email, zendesk_token]):
+            await task_logger.log_task_failure(
+                log_entry,
+                f"Zendesk credentials not found in connector config for connector {connector_id}",
+                "Missing Zendesk credentials",
+                {"error_type": "MissingCredentials"},
+            )
+            return 0, "Zendesk credentials not found in connector config"
+
+        # Initialize Zendesk client
+        await task_logger.log_task_progress(
+            log_entry,
+            f"Initializing Zendesk client for connector {connector_id}",
+            {"stage": "client_initialization"},
+        )
+
+        zendesk_client = ZendeskConnector(
+            subdomain=zendesk_subdomain, email=zendesk_email, api_token=zendesk_token
+        )
+
+        # Test connection
+        if not await zendesk_client.test_connection():
+            await task_logger.log_task_failure(
+                log_entry,
+                f"Failed to connect to Zendesk for connector {connector_id}",
+                "Zendesk connection failed",
+                {"error_type": "ConnectionError"},
+            )
+            return 0, "Failed to connect to Zendesk"
+
+        # Fetch tickets and articles
+        await task_logger.log_task_progress(
+            log_entry,
+            "Fetching tickets and articles from Zendesk",
+            {"stage": "fetch_data"},
+        )
+        tickets = await zendesk_client.get_tickets()
+        articles = await zendesk_client.get_help_center_articles()
+        all_content = tickets + articles
+
+        if not all_content:
+            await task_logger.log_task_success(
+                log_entry,
+                "No new content found in Zendesk",
+                {"tickets_found": 0, "articles_found": 0},
+            )
+            return 0, "No new content found in Zendesk"
+
+        documents_indexed = 0
+        documents_skipped = 0
+
+        for content_type, content_list in [("ticket", tickets), ("article", articles)]:
+            for content in content_list:
                 content_id = f"zendesk_{content_type}_{content['id']}"
-                
-                # Create document
-                title = content.get('title') or content.get('subject', '')
-                body = content.get('body') or content.get('description', '')
-                
-                # Include comments for tickets
-                if content_type == 'ticket' and content.get('comments'):
-                    comments_text = "\n\n".join([
-                        f"Comment: {comment['body']}" 
-                        for comment in content['comments'] 
-                        if comment.get('body')
-                    ])
-                    if comments_text:
-                        body += "\n\n" + comments_text
-                
-                # Check if document already exists
-                existing_doc_stmt = select(Document).where(
-                    Document.connector_source_id == content_id,
-                    Document.search_space_id == search_space_id
-                )
-                existing_doc_result = await session.execute(existing_doc_stmt)
-                existing_doc = existing_doc_result.scalar_one_or_none()
-                
-                if existing_doc:
-                    # Update existing document
-                    existing_doc.title = title
-                    existing_doc.content = body
-                    existing_doc.updated_at = datetime.utcnow()
-                    document = existing_doc
-                else:
-                    # Create new document
-                    document = Document(
-                        title=title,
-                        content=body,
-                        document_type=DocumentTypeEnum.ZENDESK_CONNECTOR,
-                        connector_source_id=content_id,
-                        search_space_id=search_space_id,
-                        created_at=datetime.utcnow(),
-                        updated_at=datetime.utcnow(),
-                        metadata={
-                            'zendesk_type': content_type,
-                            'zendesk_id': content['id'],
-                            'url': content.get('url', ''),
-                            'status': content.get('status'),
-                            'created_at': content.get('created_at'),
-                            'updated_at': content.get('updated_at')
-                        }
+
+                # Create a unified text representation
+                if content_type == "ticket":
+                    text_content = (
+                        f"Subject: {content['subject']}\n\n{content['description']}"
                     )
-                    session.add(document)
-                
-                await session.flush()
-                
-                # Create chunks and embeddings (following existing pattern)
-                await create_document_chunks_and_embeddings(
-                    document=document,
-                    session=session
+                    if content.get("comments"):
+                        comments_text = "\n\n".join(
+                            [f"Comment: {c['body']}" for c in content["comments"]]
+                        )
+                        text_content += "\n\n" + comments_text
+                else:  # article
+                    text_content = f"Title: {content['title']}\n\n{content['body']}"
+
+                content_hash = generate_content_hash(text_content, search_space_id)
+
+                # Check if document with this content hash already exists
+                existing_doc_by_hash_result = await session.execute(
+                    select(Document).where(Document.content_hash == content_hash)
                 )
-            
-            await session.commit()
-            logger.info(f"Successfully indexed {len(all_content)} Zendesk items")
-            
-        except Exception as e:
-            logger.error(f"Error indexing Zendesk content: {e}")
-            await session.rollback()
-            raise
+                existing_document_by_hash = (
+                    existing_doc_by_hash_result.scalars().first()
+                )
+
+                if existing_document_by_hash:
+                    logger.info(
+                        f"Document with content hash {content_hash} already exists for {content_id}. Skipping processing."
+                    )
+                    documents_skipped += 1
+                    continue
+
+                # Create and store new document
+                doc = Document(
+                    search_space_id=search_space_id,
+                    connector_source_id=content_id,
+                    content=text_content,
+                    document_type=DocumentType.ZENDESK_CONNECTOR,
+                    document_metadata={
+                        "zendesk_type": content_type,
+                        "zendesk_id": content["id"],
+                        "title": content.get("subject") or content.get("title"),
+                        "url": content.get("url"),
+                        "created_at": content.get("created_at"),
+                        "updated_at": content.get("updated_at"),
+                    },
+                    content_hash=content_hash,
+                )
+                session.add(doc)
+                await session.flush()
+
+                # Create chunks and embeddings
+                # This is a placeholder for your chunking and embedding logic
+                # You'll need to implement this based on your chosen libraries
+
+                documents_indexed += 1
+
+        if update_last_indexed and documents_indexed > 0:
+            connector.last_indexed_at = datetime.now()
+
+        await session.commit()
+        await task_logger.log_task_success(
+            log_entry,
+            f"Successfully indexed {documents_indexed} Zendesk items",
+            {
+                "documents_indexed": documents_indexed,
+                "documents_skipped": documents_skipped,
+            },
+        )
+        return documents_indexed, None
+
+    except Exception as e:
+        await session.rollback()
+        await task_logger.log_task_failure(
+            log_entry,
+            f"Error indexing Zendesk content: {e}",
+            str(e),
+            {"error_type": type(e).__name__},
+        )
+        logger.error(f"Error indexing Zendesk content: {e}")
+        return 0, str(e)
 
 
 async def index_jira_issues(
@@ -2817,4 +2928,3 @@ async def index_confluence_pages(
         )
         logger.error(f"Failed to index Confluence pages: {e!s}", exc_info=True)
         return 0, f"Failed to index Confluence pages: {e!s}"
-

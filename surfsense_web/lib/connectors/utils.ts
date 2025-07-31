@@ -9,6 +9,7 @@ export const getConnectorTypeDisplay = (type: string): string => {
 		LINEAR_CONNECTOR: "Linear",
 		JIRA_CONNECTOR: "Jira",
 		DISCORD_CONNECTOR: "Discord",
+		ZENDESK_CONNECTOR: "Zendesk",
 		LINKUP_API: "Linkup",
 	};
 	return typeMap[type] || type;

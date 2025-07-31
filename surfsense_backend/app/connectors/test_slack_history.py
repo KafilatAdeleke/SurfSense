@@ -4,13 +4,13 @@ from unittest.mock import Mock, call, patch
 from slack_sdk.errors import SlackApiError
 
 # Since test_slack_history.py is in the same directory as slack_history.py
-from .slack_history import SlackHistory
+from surfsense_backend.app.connectors.slack_history import SlackHistory
 
 
 class TestSlackHistoryGetAllChannels(unittest.TestCase):
     @patch("surfsense_backend.app.connectors.slack_history.logger")
     @patch("surfsense_backend.app.connectors.slack_history.time.sleep")
-    @patch("slack_sdk.WebClient")
+    @patch("surfsense_backend.app.connectors.slack_history.WebClient")
     def test_get_all_channels_pagination_with_delay(
         self, mock_web_client, mock_sleep, mock_logger
     ):
@@ -18,6 +18,7 @@ class TestSlackHistoryGetAllChannels(unittest.TestCase):
 
         # Mock API responses now include is_private and is_member
         page1_response = {
+            "ok": True,
             "channels": [
                 {"name": "general", "id": "C1", "is_private": False, "is_member": True},
                 {"name": "dev", "id": "C0", "is_private": False, "is_member": True},
@@ -25,6 +26,7 @@ class TestSlackHistoryGetAllChannels(unittest.TestCase):
             "response_metadata": {"next_cursor": "cursor123"},
         }
         page2_response = {
+            "ok": True,
             "channels": [
                 {"name": "random", "id": "C2", "is_private": True, "is_member": True}
             ],
@@ -66,7 +68,7 @@ class TestSlackHistoryGetAllChannels(unittest.TestCase):
 
     @patch("surfsense_backend.app.connectors.slack_history.logger")
     @patch("surfsense_backend.app.connectors.slack_history.time.sleep")
-    @patch("slack_sdk.WebClient")
+    @patch("surfsense_backend.app.connectors.slack_history.WebClient")
     def test_get_all_channels_rate_limit_with_retry_after(
         self, mock_web_client, mock_sleep, mock_logger
     ):
@@ -75,8 +77,10 @@ class TestSlackHistoryGetAllChannels(unittest.TestCase):
         mock_error_response = Mock()
         mock_error_response.status_code = 429
         mock_error_response.headers = {"Retry-After": "5"}
+        mock_error_response.data = {"ok": False, "error": "ratelimited"}
 
         successful_response = {
+            "ok": True,
             "channels": [
                 {"name": "general", "id": "C1", "is_private": False, "is_member": True}
             ],
@@ -111,7 +115,7 @@ class TestSlackHistoryGetAllChannels(unittest.TestCase):
 
     @patch("surfsense_backend.app.connectors.slack_history.logger")
     @patch("surfsense_backend.app.connectors.slack_history.time.sleep")
-    @patch("slack_sdk.WebClient")
+    @patch("surfsense_backend.app.connectors.slack_history.WebClient")
     def test_get_all_channels_rate_limit_no_retry_after_valid_header(
         self, mock_web_client, mock_sleep, mock_logger
     ):
@@ -120,8 +124,10 @@ class TestSlackHistoryGetAllChannels(unittest.TestCase):
         mock_error_response = Mock()
         mock_error_response.status_code = 429
         mock_error_response.headers = {"Retry-After": "invalid_value"}
+        mock_error_response.data = {"ok": False, "error": "ratelimited"}
 
         successful_response = {
+            "ok": True,
             "channels": [
                 {"name": "general", "id": "C1", "is_private": False, "is_member": True}
             ],
@@ -148,7 +154,7 @@ class TestSlackHistoryGetAllChannels(unittest.TestCase):
 
     @patch("surfsense_backend.app.connectors.slack_history.logger")
     @patch("surfsense_backend.app.connectors.slack_history.time.sleep")
-    @patch("slack_sdk.WebClient")
+    @patch("surfsense_backend.app.connectors.slack_history.WebClient")
     def test_get_all_channels_rate_limit_no_retry_after_header(
         self, mock_web_client, mock_sleep, mock_logger
     ):
@@ -157,8 +163,10 @@ class TestSlackHistoryGetAllChannels(unittest.TestCase):
         mock_error_response = Mock()
         mock_error_response.status_code = 429
         mock_error_response.headers = {}
+        mock_error_response.data = {"ok": False, "error": "ratelimited"}
 
         successful_response = {
+            "ok": True,
             "channels": [
                 {"name": "general", "id": "C1", "is_private": False, "is_member": True}
             ],
@@ -185,7 +193,7 @@ class TestSlackHistoryGetAllChannels(unittest.TestCase):
 
     @patch("surfsense_backend.app.connectors.slack_history.logger")
     @patch("surfsense_backend.app.connectors.slack_history.time.sleep")
-    @patch("slack_sdk.WebClient")
+    @patch("surfsense_backend.app.connectors.slack_history.WebClient")
     def test_get_all_channels_other_slack_api_error(
         self, mock_web_client, mock_sleep, mock_logger
     ):
@@ -216,13 +224,14 @@ class TestSlackHistoryGetAllChannels(unittest.TestCase):
 
     @patch("surfsense_backend.app.connectors.slack_history.logger")
     @patch("surfsense_backend.app.connectors.slack_history.time.sleep")
-    @patch("slack_sdk.WebClient")
+    @patch("surfsense_backend.app.connectors.slack_history.WebClient")
     def test_get_all_channels_handles_missing_name_id_gracefully(
         self, mock_web_client, mock_sleep, mock_logger
     ):
         mock_client_instance = mock_web_client.return_value
 
         response_with_malformed_data = {
+            "ok": True,
             "channels": [
                 {"id": "C1_missing_name", "is_private": False, "is_member": True},
                 {"name": "channel_missing_id", "is_private": False, "is_member": True},
@@ -275,12 +284,13 @@ if __name__ == "__main__":
 class TestSlackHistoryGetConversationHistory(unittest.TestCase):
     @patch("surfsense_backend.app.connectors.slack_history.logger")
     @patch("surfsense_backend.app.connectors.slack_history.time.sleep")
-    @patch("slack_sdk.WebClient")
+    @patch("surfsense_backend.app.connectors.slack_history.WebClient")
     def test_proactive_delay_single_page(
         self, mock_web_client, mock_time_sleep, mock_logger
     ):
         mock_client_instance = mock_web_client.return_value
         mock_client_instance.conversations_history.return_value = {
+            "ok": True,
             "messages": [{"text": "msg1"}],
             "has_more": False,
         }
@@ -292,18 +302,19 @@ class TestSlackHistoryGetConversationHistory(unittest.TestCase):
 
     @patch("surfsense_backend.app.connectors.slack_history.logger")
     @patch("surfsense_backend.app.connectors.slack_history.time.sleep")
-    @patch("slack_sdk.WebClient")
+    @patch("surfsense_backend.app.connectors.slack_history.WebClient")
     def test_proactive_delay_multiple_pages(
         self, mock_web_client, mock_time_sleep, mock_logger
     ):
         mock_client_instance = mock_web_client.return_value
         mock_client_instance.conversations_history.side_effect = [
             {
+                "ok": True,
                 "messages": [{"text": "msg1"}],
                 "has_more": True,
                 "response_metadata": {"next_cursor": "cursor1"},
             },
-            {"messages": [{"text": "msg2"}], "has_more": False},
+            {"ok": True, "messages": [{"text": "msg2"}], "has_more": False},
         ]
 
         slack_history = SlackHistory(token="fake_token")
@@ -315,17 +326,18 @@ class TestSlackHistoryGetConversationHistory(unittest.TestCase):
 
     @patch("surfsense_backend.app.connectors.slack_history.logger")
     @patch("surfsense_backend.app.connectors.slack_history.time.sleep")
-    @patch("slack_sdk.WebClient")
+    @patch("surfsense_backend.app.connectors.slack_history.WebClient")
     def test_retry_after_logic(self, mock_web_client, mock_time_sleep, mock_logger):
         mock_client_instance = mock_web_client.return_value
 
         mock_error_response = Mock()
         mock_error_response.status_code = 429
         mock_error_response.headers = {"Retry-After": "5"}
+        mock_error_response.data = {"ok": False, "error": "ratelimited"}
 
         mock_client_instance.conversations_history.side_effect = [
             SlackApiError(message="ratelimited", response=mock_error_response),
-            {"messages": [{"text": "msg1"}], "has_more": False},
+            {"ok": True, "messages": [{"text": "msg1"}], "has_more": False},
         ]
 
         slack_history = SlackHistory(token="fake_token")
@@ -342,7 +354,7 @@ class TestSlackHistoryGetConversationHistory(unittest.TestCase):
 
     @patch("surfsense_backend.app.connectors.slack_history.logger")
     @patch("surfsense_backend.app.connectors.slack_history.time.sleep")
-    @patch("slack_sdk.WebClient")
+    @patch("surfsense_backend.app.connectors.slack_history.WebClient")
     def test_not_in_channel_error(self, mock_web_client, mock_time_sleep, mock_logger):
         mock_client_instance = mock_web_client.return_value
 
@@ -370,7 +382,7 @@ class TestSlackHistoryGetConversationHistory(unittest.TestCase):
 
     @patch("surfsense_backend.app.connectors.slack_history.logger")
     @patch("surfsense_backend.app.connectors.slack_history.time.sleep")
-    @patch("slack_sdk.WebClient")
+    @patch("surfsense_backend.app.connectors.slack_history.WebClient")
     def test_other_slack_api_error_propagates(
         self, mock_web_client, mock_time_sleep, mock_logger
     ):
@@ -398,7 +410,7 @@ class TestSlackHistoryGetConversationHistory(unittest.TestCase):
 
     @patch("surfsense_backend.app.connectors.slack_history.logger")
     @patch("surfsense_backend.app.connectors.slack_history.time.sleep")
-    @patch("slack_sdk.WebClient")
+    @patch("surfsense_backend.app.connectors.slack_history.WebClient")
     def test_general_exception_propagates(
         self, mock_web_client, mock_time_sleep, mock_logger
     ):
@@ -423,19 +435,20 @@ class TestSlackHistoryGetConversationHistory(unittest.TestCase):
 class TestSlackHistoryGetUserInfo(unittest.TestCase):
     @patch("surfsense_backend.app.connectors.slack_history.logger")
     @patch("surfsense_backend.app.connectors.slack_history.time.sleep")
-    @patch("slack_sdk.WebClient")
+    @patch("surfsense_backend.app.connectors.slack_history.WebClient")
     def test_retry_after_logic(self, mock_web_client, mock_time_sleep, mock_logger):
         mock_client_instance = mock_web_client.return_value
 
         mock_error_response = Mock()
         mock_error_response.status_code = 429
         mock_error_response.headers = {"Retry-After": "3"}  # Using 3 seconds for test
+        mock_error_response.data = {"ok": False, "error": "ratelimited"}
 
         successful_user_data = {"id": "U123", "name": "testuser"}
 
         mock_client_instance.users_info.side_effect = [
             SlackApiError(message="ratelimited_userinfo", response=mock_error_response),
-            {"user": successful_user_data},
+            {"ok": True, "user": successful_user_data},
         ]
 
         slack_history = SlackHistory(token="fake_token")
@@ -458,7 +471,7 @@ class TestSlackHistoryGetUserInfo(unittest.TestCase):
     @patch(
         "surfsense_backend.app.connectors.slack_history.time.sleep"
     )  # time.sleep might be called by other logic, but not expected here
-    @patch("slack_sdk.WebClient")
+    @patch("surfsense_backend.app.connectors.slack_history.WebClient")
     def test_other_slack_api_error_propagates(
         self, mock_web_client, mock_time_sleep, mock_logger
     ):
@@ -485,7 +498,7 @@ class TestSlackHistoryGetUserInfo(unittest.TestCase):
 
     @patch("surfsense_backend.app.connectors.slack_history.logger")
     @patch("surfsense_backend.app.connectors.slack_history.time.sleep")
-    @patch("slack_sdk.WebClient")
+    @patch("surfsense_backend.app.connectors.slack_history.WebClient")
     def test_general_exception_propagates(
         self, mock_web_client, mock_time_sleep, mock_logger
     ):

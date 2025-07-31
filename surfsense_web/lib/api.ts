@@ -68,6 +68,20 @@ export function getApiUrl(path: string): string {
 	return `${baseUrl}/${cleanPath}`;
 }
 
+export enum SearchSourceConnectorType {
+	SERPER_API = "SERPER_API",
+	TAVILY_API = "TAVILY_API",
+	SLACK_CONNECTOR = "SLACK_CONNECTOR",
+	NOTION_CONNECTOR = "NOTION_CONNECTOR",
+	GITHUB_CONNECTOR = "GITHUB_CONNECTOR",
+	LINEAR_CONNECTOR = "LINEAR_CONNECTOR",
+	JIRA_CONNECTOR = "JIRA_CONNECTOR",
+	CONFLUENCE_CONNECTOR = "CONFLUENCE_CONNECTOR",
+	DISCORD_CONNECTOR = "DISCORD_CONNECTOR",
+	ZENDESK_CONNECTOR = "ZENDESK_CONNECTOR",
+	LINKUP_API = "LINKUP_API",
+}
+
 /**
  * API client with methods for common operations
  */

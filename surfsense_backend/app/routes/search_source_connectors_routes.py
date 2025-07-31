@@ -38,12 +38,12 @@ from app.schemas import (
 from app.tasks.connectors_indexing_tasks import (
     index_confluence_pages,
     index_discord_messages,
-    index_zendesk_content,
     index_github_repos,
     index_jira_issues,
     index_linear_issues,
     index_notion_pages,
     index_slack_messages,
+    run_zendesk_indexing,
 )
 from app.users import current_active_user
 from app.utils.check_ownership import check_ownership
@@ -490,6 +490,21 @@ async def index_connector_content(
             )
             response_message = "Discord indexing started in the background."
 
+        elif connector.connector_type == SearchSourceConnectorType.ZENDESK_CONNECTOR:
+            # Run indexing in background
+            logger.info(
+                f"Triggering Zendesk indexing for connector {connector_id} into search space {search_space_id} from {indexing_from} to {indexing_to}"
+            )
+            background_tasks.add_task(
+                run_zendesk_indexing_with_new_session,
+                connector_id,
+                search_space_id,
+                str(user.id),
+                indexing_from,
+                indexing_to,
+            )
+            response_message = "Zendesk indexing started in the background."
+
         else:
             raise HTTPException(
                 status_code=400,
@@ -513,14 +528,6 @@ async def index_connector_content(
         raise HTTPException(
             status_code=500, detail=f"Failed to initiate indexing: {e!s}"
         ) from e
-
-        # Add Zendesk support to the indexing endpoint
-        elif connector.connector_type == ConnectorTypeEnum.ZENDESK_CONNECTOR:
-            background_tasks.add_task(
-            index_zendesk_content,
-            search_source_connector_id=search_source_connector_id,
-            search_space_id=search_space_id
-            )
 
 
 async def update_connector_last_indexed(session: AsyncSession, connector_id: int):
@@ -910,6 +917,24 @@ async def run_jira_indexing(
             exc_info=True,
         )
         # Optionally update status in DB to indicate failure
+
+
+async def run_zendesk_indexing_with_new_session(
+    connector_id: int,
+    search_space_id: int,
+    user_id: str,
+    start_date: str,
+    end_date: str,
+):
+    """Wrapper to run Zendesk indexing with its own database session."""
+    logger.info(
+        f"Background task started: Indexing Zendesk connector {connector_id} into space {search_space_id} from {start_date} to {end_date}"
+    )
+    async with async_session_maker() as session:
+        await run_zendesk_indexing(
+            session, connector_id, search_space_id, user_id, start_date, end_date
+        )
+    logger.info(f"Background task finished: Indexing Zendesk connector {connector_id}")
 
 
 # Add new helper functions for Confluence indexing
